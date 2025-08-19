@@ -1,0 +1,1799 @@
+'use client';
+import React, { Suspense, useState, useEffect, memo, useMemo } from 'react';
+import { Canvas, useLoader } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import * as THREE from 'three';
+import { TextureLoader, Object3D } from 'three';
+import Header from '@/components/Header';
+import { SkinSlot, ColorState } from './types';
+import { DINOSAURS } from './dinosaurs';
+
+const discordLinks = [
+  { name: 'Join Community', href: 'https://discord.gg/primalheaven' },
+  { name: 'Help', href: '/discord/help' },
+  { name: 'Rules', href: '/rules' },
+];
+
+const survivalLinks = [
+  { name: 'Server Map', href: '/survival/map' },
+  { name: 'Your Migration', href: '/migration' },
+  { name: 'Rules', href: '/rules' },
+  { name: 'More Coming Soon', href: '/' },
+];
+
+const deathmatchLinks = [
+  { name: 'Rules', href: '/rules' },
+  { name: 'More Coming Soon', href: '/' },
+];
+
+interface ModelProps {
+  colors: ColorState;
+  selectedPattern: number;
+  selectedDino: string;
+  glitchSkinValues: Partial<Record<keyof ColorState, string>>;
+}
+
+type ColorPickerItem = {
+  label: string;
+  key: keyof ColorState;
+};
+
+type ToastType = 'success' | 'error' | 'info';
+
+interface Toast {
+  message: string;
+  type: ToastType;
+  visible: boolean;
+}
+
+interface HeaderProps {
+  links: {
+    discord: Array<{ name: string; href: string }>;
+    survival: Array<{ name: string; href: string }>;
+    deathmatch: Array<{ name: string; href: string }>;
+  };
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode, fallback: React.ReactNode }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Error in 3D component:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+const MemoizedHeader = memo(Header);
+
+const Model3D = memo<ModelProps>(({ colors, selectedPattern, selectedDino, glitchSkinValues }) => {
+  const dinoData = DINOSAURS[selectedDino];
+  const obj = useLoader(OBJLoader, dinoData.model);
+  const normalMap = useLoader(TextureLoader, dinoData.normalMap);
+  const patternTexture = useLoader(TextureLoader, dinoData.patterns[selectedPattern]);
+
+  // Create material with normal map
+  const material = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      normalMap: normalMap,
+      normalScale: new THREE.Vector2(1, 1),
+      roughness: 0.7,
+      metalness: 0.3,
+    });
+    return mat;
+  }, [normalMap]);
+
+  // Apply material and modify colors
+  useEffect(() => {
+    obj.traverse((child: Object3D) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = material;
+        material.normalMap = normalMap;
+        material.normalScale = new THREE.Vector2(7, 7);
+        material.needsUpdate = true;
+        material.roughness = 0.75;
+      }
+    });
+  }, [obj, material, normalMap]);
+
+  return (
+    <primitive 
+      object={obj} 
+      scale={dinoData.scale}
+      position={dinoData.position}
+    />
+  );
+});
+
+Model3D.displayName = 'Model3D';
+
+// Default export
+export default function Page() {
+  // State variables
+  const [isDaylight, setIsDaylight] = useState(true);
+  const [marks, setMarks] = useState<boolean>(false);
+  const [selectedDino, setSelectedDino] = useState<string>('Dibble');
+  const [selectedPattern, setSelectedPattern] = useState<number>(1);
+  const [colors, setColors] = useState<ColorState>({
+    maleColor: '#FFFFFF',
+    highColor: '#FFFFFF',
+    midColor: '#FFFFFF',
+    mid2Color: '#FFFFFF',
+    lowColor: '#FFFFFF',
+    bottomColor: '#FFFFFF',
+    eyeColor: '#FFFFFF',
+  });
+  const [glitchSkinValues, setGlitchSkinValues] = useState<Partial<Record<keyof ColorState, string>>>({});
+  const [toast, setToast] = useState<Toast>({ message: '', type: 'info', visible: false });
+
+  const colorPickers: ColorPickerItem[] = [
+    { label: 'Male Color', key: 'maleColor' },
+    { label: 'High Color', key: 'highColor' },
+    { label: 'Mid Color', key: 'midColor' },
+    { label: 'Mid 2 Color', key: 'mid2Color' },
+    { label: 'Low Color', key: 'lowColor' },
+    { label: 'Bottom Color', key: 'bottomColor' },
+    { label: 'Eye Color', key: 'eyeColor' },
+  ];
+
+  // Color picker handlers
+  const handleColorChange = (color: string, key: keyof ColorState) => {
+    setColors(prev => ({ ...prev, [key]: color }));
+  };
+
+  // Pattern selection handler
+  const handlePatternChange = (pattern: number) => {
+    setSelectedPattern(pattern);
+  };
+
+  // Dino selection handler
+  const handleDinoChange = (dino: string) => {
+    setSelectedDino(dino);
+  };
+
+  // 3D Model component
+  const Model = memo(({ colors, selectedPattern, selectedDino, glitchSkinValues }: ModelProps) => {
+    const dinoData = DINOSAURS[selectedDino];
+    const obj = useLoader(OBJLoader, dinoData.model);
+    const normalMap = useLoader(TextureLoader, dinoData.normalMap);
+    const patternTexture = useLoader(TextureLoader, dinoData.patterns[selectedPattern]);
+    
+    // Create material with normal map
+    const material = useMemo(() => {
+      return new THREE.MeshStandardMaterial({
+        normalMap: normalMap,
+        normalScale: new THREE.Vector2(1, 1),
+        roughness: 0.7,
+        metalness: 0.3,
+      });
+    }, [normalMap]);
+
+    useEffect(() => {
+      obj.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          child.material = material;
+        }
+      });
+    }, [obj, material]);
+
+    return (
+      <primitive 
+        object={obj}
+        scale={dinoData.scale}
+        position={dinoData.position}
+      />
+    );
+  });
+
+  Model.displayName = 'Model';
+
+  return (
+    <div className="min-h-screen bg-black/50">
+      <MemoizedHeader 
+        links={{
+          discord: discordLinks,
+          survival: survivalLinks,
+          deathmatch: deathmatchLinks
+        }}
+      />
+      
+      <main className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-6 gap-4">
+          {/* Left Sidebar - Color Pickers */}
+          <div className="col-span-2 space-y-4">
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Colors</h2>
+              <div className="space-y-4">
+                {colorPickers.map((picker) => (
+                  <div key={picker.key} className="flex items-center justify-between">
+                    <label className="text-sm font-medium">{picker.label}</label>
+                    <input
+                      type="color"
+                      value={colors[picker.key]}
+                      onChange={(e) => handleColorChange(e.target.value, picker.key)}
+                      className="w-10 h-10 rounded cursor-pointer"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Dino Selection */}
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Select Dinosaur</h2>
+              <select
+                value={selectedDino}
+                onChange={(e) => handleDinoChange(e.target.value)}
+                className="w-full bg-gray-700 text-white rounded p-2"
+              >
+                {Object.keys(DINOSAURS).map((dino) => (
+                  <option key={dino} value={dino}>{dino}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pattern Selection */}
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Select Pattern</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {DINOSAURS[selectedDino].patterns.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handlePatternChange(index)}
+                    className={`p-2 rounded ${selectedPattern === index ? 'bg-blue-500' : 'bg-gray-700'}`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content - 3D Viewer */}
+          <div className="col-span-4 bg-gray-800/50 rounded-xl p-3 backdrop-blur-sm relative min-h-[600px]">
+            <ErrorBoundary fallback={<div>Error loading 3D viewer</div>}>
+              <Canvas
+                camera={{ position: [0, 0, 9], fov: 45 }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <Suspense fallback={null}>
+                  <ambientLight intensity={isDaylight ? 0.5 : 0.25} />
+                  <directionalLight 
+                    position={[10, 10, 5]} 
+                    intensity={isDaylight ? 1 : 0.5} 
+                  />
+                  <Model 
+                    colors={colors}
+                    selectedPattern={selectedPattern}
+                    selectedDino={selectedDino}
+                    glitchSkinValues={glitchSkinValues}
+                  />
+                  <OrbitControls
+                    autoRotate={false}
+                    enableZoom={false}
+                    enablePan={false}
+                    minPolarAngle={Math.PI / 2}
+                    maxPolarAngle={Math.PI / 2}
+                  />
+                </Suspense>
+              </Canvas>
+              <button
+                onClick={() => setIsDaylight(!isDaylight)}
+                className="absolute top-4 right-4 bg-gray-700 p-2 rounded-full"
+              >
+                {isDaylight ? '🌙' : '☀️'}
+              </button>
+            </ErrorBoundary>
+          </div>
+        </div>
+
+        {/* Toast Notification */}
+        {toast.visible && (
+          <div className={`fixed bottom-4 right-4 p-4 rounded-lg ${
+            toast.type === 'success' ? 'bg-green-500' :
+            toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+          }`}>
+            {toast.message}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default function SkinCreator() {
+  // State variables
+  const [isDaylight, setIsDaylight] = useState(true);
+  const [marks, setMarks] = useState<boolean>(false);
+  const [selectedDino, setSelectedDino] = useState<string>('Dibble');
+  const [selectedPattern, setSelectedPattern] = useState<number>(1);
+  const [colors, setColors] = useState<ColorState>({
+    maleColor: '#FFFFFF',
+    highColor: '#FFFFFF',
+    midColor: '#FFFFFF',
+    mid2Color: '#FFFFFF',
+    lowColor: '#FFFFFF',
+    bottomColor: '#FFFFFF',
+    eyeColor: '#FFFFFF',
+  });
+  const [glitchSkinValues, setGlitchSkinValues] = useState<Partial<Record<keyof ColorState, string>>>({});
+  const [toast, setToast] = useState<Toast>({ message: '', type: 'info', visible: false });
+
+  const colorPickers: ColorPickerItem[] = [
+    { label: 'Male Color', key: 'maleColor' },
+    { label: 'High Color', key: 'highColor' },
+    { label: 'Mid Color', key: 'midColor' },
+    { label: 'Mid 2 Color', key: 'mid2Color' },
+    { label: 'Low Color', key: 'lowColor' },
+    { label: 'Bottom Color', key: 'bottomColor' },
+    { label: 'Eye Color', key: 'eyeColor' },
+  ];
+
+  // Color picker handlers
+  const handleColorChange = (color: string, key: keyof ColorState) => {
+    setColors(prev => ({ ...prev, [key]: color }));
+  };
+
+  // Pattern selection handler
+  const handlePatternChange = (pattern: number) => {
+    setSelectedPattern(pattern);
+  };
+
+  // Dino selection handler
+  const handleDinoChange = (dino: string) => {
+    setSelectedDino(dino);
+  };
+
+  return (
+    <div className="min-h-screen bg-black/50">
+      <MemoizedHeader 
+        discordLinks={discordLinks}
+        survivalLinks={survivalLinks}
+        deathmatchLinks={deathmatchLinks}
+      />
+      
+      <main className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-6 gap-4">
+          {/* Left Sidebar - Color Pickers */}
+          <div className="col-span-2 space-y-4">
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Colors</h2>
+              <div className="space-y-4">
+                {colorPickers.map((picker) => (
+                  <div key={picker.key} className="flex items-center justify-between">
+                    <label className="text-sm font-medium">{picker.label}</label>
+                    <input
+                      type="color"
+                      value={colors[picker.key]}
+                      onChange={(e) => handleColorChange(e.target.value, picker.key)}
+                      className="w-10 h-10 rounded cursor-pointer"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Dino Selection */}
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Select Dinosaur</h2>
+              <select
+                value={selectedDino}
+                onChange={(e) => handleDinoChange(e.target.value)}
+                className="w-full bg-gray-700 text-white rounded p-2"
+              >
+                {Object.keys(DINOSAURS).map((dino) => (
+                  <option key={dino} value={dino}>{dino}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pattern Selection */}
+            <div className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-4">Select Pattern</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {DINOSAURS[selectedDino].patterns.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handlePatternChange(index)}
+                    className={`p-2 rounded ${selectedPattern === index ? 'bg-blue-500' : 'bg-gray-700'}`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content - 3D Viewer */}
+          <div className="col-span-4 bg-gray-800/50 rounded-xl p-3 backdrop-blur-sm relative min-h-[600px]">
+            <ErrorBoundary fallback={<div>Error loading 3D viewer</div>}>
+              <Canvas
+                camera={{ position: [0, 0, 9], fov: 45 }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <Suspense fallback={null}>
+                  <ambientLight intensity={isDaylight ? 0.5 : 0.25} />
+                  <directionalLight 
+                    position={[10, 10, 5]} 
+                    intensity={isDaylight ? 1 : 0.5} 
+                  />
+                  <Model 
+                    colors={colors}
+                    selectedPattern={selectedPattern}
+                    selectedDino={selectedDino}
+                    glitchSkinValues={glitchSkinValues}
+                  />
+                  <OrbitControls
+                    autoRotate={false}
+                    enableZoom={false}
+                    enablePan={false}
+                    minPolarAngle={Math.PI / 2}
+                    maxPolarAngle={Math.PI / 2}
+                  />
+                </Suspense>
+              </Canvas>
+              <button
+                onClick={() => setIsDaylight(!isDaylight)}
+                className="absolute top-4 right-4 bg-gray-700 p-2 rounded-full"
+              >
+                {isDaylight ? '🌙' : '☀️'}
+              </button>
+            </ErrorBoundary>
+          </div>
+        </div>
+
+        {/* Toast Notification */}
+        {toast.visible && (
+          <div className={`fixed bottom-4 right-4 p-4 rounded-lg ${
+            toast.type === 'success' ? 'bg-green-500' :
+            toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+          }`}>
+            {toast.message}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+type GlitchEffectGroup = Record<string, GlitchEffectInput[]>;
+// Already defined above
+
+
+
+
+// // Add this with your other constants
+// const GLITCH_SKIN_OPTIONS: Record<keyof ColorState, GlitchSkinOption[]> = {
+//   maleColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   highColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   midColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   mid2Color: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   lowColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   bottomColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ],
+//   eyeColor: [
+//     { name: "Black w/ White Outline", value: "X=10.0,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Pink Outline", value: "X=10.0,Y=0.00000000001,Z=10.0" },
+//     { name: "Black w/ Turquoise Outline", value: "X=0.00000000001,Y=10.0,Z=10.0" },
+//     { name: "Black w/ Yellow Outline", value: "X=10.0,Y=10.0,Z=0.00000001" },
+//     { name: "Black w/ Red Outline", value: "X=10.0,Y=0.00001,Z=0.000001" },
+//     { name: "Black w/ Blue Outline", value: "X=0.00001,Y=0.00001,Z=10.0" },
+//     { name: "Black w/ Green Outline", value: "X=0.00001,Y=10.0,Z=0.0000001" }
+//   ]
+// };
+
+// Helper to check if a pixel is a glitch pixel and get its XYZ and intensity
+function getGlitchInfo(xyzString: string) {
+  const xyz = parseXYZ(xyzString);
+  const isGlitch = xyz.X >= 1.0 || xyz.Y >= 1.0 || xyz.Z >= 1.0;
+  let intensity: 'none' | 'thin' | 'normal' | 'bold' = 'none';
+  if (xyz.X >= 10 || xyz.Y >= 10 || xyz.Z >= 10) intensity = 'thin';
+  else if (xyz.X >= 5 || xyz.Y >= 5 || xyz.Z >= 5) intensity = 'normal';
+  else if (xyz.X >= 2 || xyz.Y >= 2 || xyz.Z >= 2) intensity = 'bold';
+  return { isGlitch, xyz, intensity };
+}
+
+// Add this function before modifyTextureColors
+function transformColor(r: number, g: number, b: number) {
+  // This is a special transformation for low color
+  // You can customize this based on how you want to transform it
+  
+  // For now, let's implement a simple transformation that enhances vibrancy
+  const intensity = Math.max(r, g, b) / 255;
+  
+  // Adjust brightness and saturation
+  const adjustedR = Math.min(255, r * 1.2);
+  const adjustedG = Math.min(255, g * 1.2);
+  const adjustedB = Math.min(255, b * 1.2);
+  
+  // Ensure contrast with surrounding colors
+  return {
+    r: Math.round(adjustedR),
+    g: Math.round(adjustedG),
+    b: Math.round(adjustedB)
+  };
+}
+
+// Helper function to parse XYZ string values - move this up
+function parseXYZ(xyzStr: string) {
+  const matches = xyzStr.match(/X=([-\d.]+),Y=([-\d.]+),Z=([-\d.]+)/);
+  if (!matches) {
+    return { X: 0, Y: 0, Z: 0 };
+  }
+  return {
+    X: parseFloat(matches[1]),
+    Y: parseFloat(matches[2]),
+    Z: parseFloat(matches[3])
+  };
+}
+
+// Add this function after your parseXYZ function
+function isGlitchSkin(xyzString: string): boolean {
+  try {
+    const xyz = parseXYZ(xyzString);
+    return xyz.X > 5 || xyz.X < 0.0001 || xyz.Y > 5 || xyz.Y < 0.0001 || xyz.Z > 5 || xyz.Z < 0.0001;
+  } catch (e) {
+    return false;
+  }
+}
+
+
+
+
+// Update modifyTextureColors to handle glitch skin values
+function modifyTextureColors(
+  texture: THREE.Texture, 
+  colors: ColorState, 
+  threshold: number = 12,
+  glitchSkinValues: Partial<Record<keyof ColorState, string>> = {}
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D context');
+
+  canvas.width = texture.image.width;
+  canvas.height = texture.image.height;
+
+  ctx.drawImage(texture.image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  // Define reference colors
+  const referenceColors = {
+      maleColor: { r: 255, g: 0, b: 0 },      // Male Color
+      highColor:  { r: 0, g: 1, b: 245 },
+      midColor: { r: 255, g: 0, b: 255 },     // High Color
+      mid2Color: { r: 255, g: 255, b: 0 },    // Mid 2 Color
+      lowColor: { r: 0, g: 255, b: 241 },     // Low Color
+      bottomColor: { r: 0, g: 255, b: 0 },    // Bottom Color
+  };
+
+  // Create a map for the color regions
+  const pixelRegions = new Uint8Array(data.length / 4);
+  
+  const colorDistance = (r1: number, g1: number, b1: number, r2: number, g2: number, b2: number) => {
+      return Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2);
+  };
+
+  const maxColorDistance = 195075;
+  const thresholdDistance = (threshold / 100) * maxColorDistance;
+
+  // First pass: identify regions
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const pixelIndex = i / 4;
+    
+    // Find what color region this pixel belongs to
+    Object.entries(referenceColors).forEach(([key, refColor], regionIndex) => {
+      if (colorDistance(r, g, b, refColor.r, refColor.g, refColor.b) <= thresholdDistance) {
+        pixelRegions[pixelIndex] = regionIndex + 1; // Store 1-based region index
+      }
+    });
+  }
+
+  const adjustSaturation = (r: number, g: number, b: number, saturationPercent: number = 20) => {
+    // Convert RGB to HSL
+    const max = Math.max(r, g, b) / 255;
+    const min = Math.min(r, g, b) / 255;
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      
+      if (max === r / 255) h = (g / 255 - b / 255) / d + (g < b ? 6 : 0);
+      else if (max === g / 255) h = (b / 255 - r / 255) / d + 2;
+      else if (max === b / 255) h = (r / 255 - g / 255) / d + 4;
+      
+      h /= 6;
+    }
+
+    // Adjust saturation
+    s = Math.min(1, s * (1 + saturationPercent / 100));
+
+    // Convert back to RGB
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+  
+      const newR = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+      const newG = Math.round(hue2rgb(p, q, h) * 255);
+      const newB = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+  
+      return { r: newR, g: newG, b: newB };
+    };
+
+  // Parse glitch skin value to RGB for outline effect
+  const parseGlitchSkinToRGB = (xyzString: string) => {
+    try {
+      // Now parseXYZ is defined when we use it
+      const xyz = parseXYZ(xyzString);
+      // Check if this is a special glitch value (very small or large values)
+      const isGlitchX = xyz.X > 5 || xyz.X < 0.0001;
+      const isGlitchY = xyz.Y > 5 || xyz.Y < 0.0001;
+      const isGlitchZ = xyz.Z > 5 || xyz.Z < 0.0001;
+      
+      // If this is a glitch value with very small components, use them for outline detection
+      // and make the main color black
+      if (isGlitchX || isGlitchY || isGlitchZ) {
+        // Base color is black
+        let outlineColor = { r: 0, g: 0, b: 0 };
+        
+        // White outline (all values high)
+        if (xyz.X > 5 && xyz.Y > 5 && xyz.Z > 5) {
+          outlineColor = { r: 255, g: 255, b: 255 };
+        }
+        // Pink outline (X high, Y very low, Z high)
+        else if (xyz.X > 5 && xyz.Y < 0.0001 && xyz.Z > 5) {
+          outlineColor = { r: 255, g: 0, b: 255 };
+        }
+        // Turquoise outline (X very low, Y high, Z high)
+        else if (xyz.X < 0.0001 && xyz.Y > 5 && xyz.Z > 5) {
+          outlineColor = { r: 0, g: 255, b: 255 };
+        }
+        // Yellow outline (X high, Y high, Z very low)
+        else if (xyz.X > 5 && xyz.Y > 5 && xyz.Z < 0.0001) {
+          outlineColor = { r: 255, g: 255, b: 0 };
+        }
+        // Red outline (X high, Y very low, Z very low)
+        else if (xyz.X > 5 && xyz.Y < 0.0001 && xyz.Z < 0.0001) {
+          outlineColor = { r: 255, g: 0, b: 0 };
+        }
+        // Blue outline (X very low, Y very low, Z high)
+        else if (xyz.X < 0.0001 && xyz.Y < 0.0001 && xyz.Z > 5) {
+          outlineColor = { r: 0, g: 0, b: 255 };
+        }
+        // Green outline (X very low, Y high, Z very low)
+        else if (xyz.X < 0.0001 && xyz.Y > 5 && xyz.Z < 0.0001) {
+          outlineColor = { r: 0, g: 255, b: 0 };
+        }
+        
+        return { 
+          isGlitch: true, 
+          baseColor: { r: 0, g: 0, b: 0 },
+          outlineColor
+        };
+      }
+      
+      // Regular color processing
+      return { 
+        isGlitch: false,
+        baseColor: { 
+          r: Math.round(xyz.X * 255), 
+          g: Math.round(xyz.Y * 255), 
+          b: Math.round(xyz.Z * 255) 
+        }
+      };
+    } catch (e) {
+      console.error("Error parsing glitch skin value:", e);
+      return { 
+        isGlitch: false, 
+        baseColor: { r: 0, g: 0, b: 0 } 
+      };
+    }
+  };
+
+  // Check if a pixel is on the boundary between regions
+  const isOnBoundary = (pixelIndex: number, width: number) => {
+    const currentRegion = pixelRegions[pixelIndex];
+    if (currentRegion === 0) return false; // No region assigned
+    
+    // Check neighboring pixels (4-way connectivity)
+    const neighbors = [
+      pixelIndex - 1, // left
+      pixelIndex + 1, // right
+      pixelIndex - width, // up
+      pixelIndex + width, // down
+    ];
+    
+    for (const neighbor of neighbors) {
+      // Skip out-of-bounds neighbors
+      if (neighbor < 0 || neighbor >= pixelRegions.length) continue;
+      
+      // If neighbor is from a different region, this is a boundary
+      if (pixelRegions[neighbor] !== 0 && pixelRegions[neighbor] !== currentRegion) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Second pass: process and color pixels with new glitch logic
+  for (let i = 0; i < data.length; i += 4) {
+    const pixelIndex = i / 4;
+    const regionIndex = pixelRegions[pixelIndex] - 1;
+    if (regionIndex < 0) continue;
+    const colorKey = Object.keys(referenceColors)[regionIndex] as keyof typeof colors;
+
+  // If this region has a glitch value
+  if (glitchSkinValues[colorKey]) {
+    const { isGlitch, xyz, intensity } = getGlitchInfo(glitchSkinValues[colorKey] as string);
+
+    if (isGlitch) {
+      // Get neighbors (left, right, up, down)
+      const neighbors = [
+        pixelIndex - 1,
+        pixelIndex + 1,
+        pixelIndex - canvas.width,
+        pixelIndex + canvas.width,
+      ].filter(idx => idx >= 0 && idx < pixelRegions.length);
+
+      let neighborGlitches = [];
+      for (const nIdx of neighbors) {
+        // Find which region this neighbor is
+        const nRegionIndex = pixelRegions[nIdx] - 1;
+        if (nRegionIndex < 0) continue;
+        const nColorKey = Object.keys(referenceColors)[nRegionIndex] as keyof typeof colors;
+        const nGlitchValue = glitchSkinValues[nColorKey];
+        if (nGlitchValue) {
+          const nInfo = getGlitchInfo(nGlitchValue);
+          if (nInfo.isGlitch) {
+            neighborGlitches.push({ idx: nIdx, xyz: nInfo.xyz, value: nGlitchValue });
+          }
+        }
+      }
+
+      // Rule A: Same glitch effect touching itself
+      if (neighborGlitches.some(n => JSON.stringify(n.xyz) === JSON.stringify(xyz))) {
+        // Black seam
+        data[i] = 0;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+        continue;
+      }
+
+      // Rule B: Different glitch effects touching
+      const diffNeighbor = neighborGlitches.find(n => JSON.stringify(n.xyz) !== JSON.stringify(xyz));
+      if (diffNeighbor) {
+        // Additive RGB blending
+        const rgbA = {
+          r: Math.min(255, Math.round(xyz.X * 255)),
+          g: Math.min(255, Math.round(xyz.Y * 255)),
+          b: Math.min(255, Math.round(xyz.Z * 255)),
+        };
+        const rgbB = {
+          r: Math.min(255, Math.round(diffNeighbor.xyz.X * 255)),
+          g: Math.min(255, Math.round(diffNeighbor.xyz.Y * 255)),
+          b: Math.min(255, Math.round(diffNeighbor.xyz.Z * 255)),
+        };
+        data[i] = Math.min(255, rgbA.r + rgbB.r);
+        data[i + 1] = Math.min(255, rgbA.g + rgbB.g);
+        data[i + 2] = Math.min(255, rgbA.b + rgbB.b);
+        continue;
+      }
+
+      // Rule C: Glitch pixel next to normal pixel (do nothing special)
+      // Intensity logic:
+      if (intensity === 'thin') {
+        // Only draw on boundary
+        if (isOnBoundary(pixelIndex, canvas.width)) {
+          data[i] = Math.round(xyz.X * 255);
+          data[i + 1] = Math.round(xyz.Y * 255);
+          data[i + 2] = Math.round(xyz.Z * 255);
+        } else {
+          // Transparent or base color (optional)
+          data[i + 3] = 0;
+        }
+      } else if (intensity === 'normal') {
+        // Draw on boundary and some random interior pixels
+        if (isOnBoundary(pixelIndex, canvas.width) || Math.random() < 0.3) {
+          data[i] = Math.round(xyz.X * 255);
+          data[i + 1] = Math.round(xyz.Y * 255);
+          data[i + 2] = Math.round(xyz.Z * 255);
+        } else {
+          data[i + 3] = 0;
+        }
+      } else {
+        // Bold: fill all
+        data[i] = Math.round(xyz.X * 255);
+        data[i + 1] = Math.round(xyz.Y * 255);
+        data[i + 2] = Math.round(xyz.Z * 255);
+      }
+      // (inside each glitch case, after setting RGB)
+      data[i + 3] = 255;
+      continue;
+    }
+  }
+
+  // Regular processing for non-glitch values
+  const hex = colors[colorKey];
+  data[i] = parseInt(hex.slice(1, 3), 16);
+  data[i + 1] = parseInt(hex.slice(3, 5), 16);
+  data[i + 2] = parseInt(hex.slice(5, 7), 16);
+  data[i + 3] = 255;
+}
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const newTexture = new THREE.Texture(canvas);
+  newTexture.needsUpdate = true;
+  return newTexture;
+}
+
+const Scene = memo<ModelProps>(({ colors, selectedPattern, selectedDino, glitchSkinValues }) => {
+  const dinoData = DINOSAURS[selectedDino];
+  const obj = useLoader(OBJLoader, dinoData.model);
+  const normalMap = useLoader(TextureLoader, dinoData.normalMap);
+  const patternTexture = useLoader(TextureLoader, dinoData.patterns[selectedPattern]);
+  const modifiedTexture = modifyTextureColors(patternTexture, colors, 12, glitchSkinValues);
+  
+  // Setup normal map parameters
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  
+  // Create material with normal map
+  const material = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      normalMap: normalMap,
+      normalScale: new THREE.Vector2(1, 1),
+      roughness: 0.7,
+      metalness: 0.3,
+      map: modifiedTexture
+    });
+    return mat;
+  }, [normalMap, modifiedTexture]);
+
+  // Apply material and modify colors
+  useEffect(() => {
+    obj.traverse((child: Object3D) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = material;
+        material.map = modifiedTexture;
+        material.normalMap = normalMap;
+        material.normalScale = new THREE.Vector2(7, 7);
+        material.needsUpdate = true;
+        material.roughness = 0.75;
+      }
+    });
+  }, [obj, material, modifiedTexture, normalMap]);
+
+  return (
+    <primitive 
+      object={obj} 
+      scale={dinoData.scale}
+      position={dinoData.position}
+    />
+  );
+});
+
+function Model(props: ModelProps) {
+  return (
+    <Suspense fallback={null}>
+      <Scene {...props} />
+    </Suspense>
+  );
+}
+
+// Demo skin slots
+
+
+// Add this CSS at the top of your file after your imports
+const activeSlotStyles = `
+  relative
+  before:content-['Active']
+  before:absolute
+  before:-top-[12px]
+  before:left-1/2
+  before:-translate-x-1/2
+  before:text-[10px]
+  before:font-bold
+  before:text-white
+  before:tracking-widest
+  before:[text-shadow:1px_1px_0px_black,-1px_-1px_0px_black,1px_-1px_0px_black,-1px_1px_0px_black]
+  
+  border-1
+  border-t-[11px]
+  border-yellow-400
+  pt-[1px]
+  pb-[1px]
+  px-[1px]
+`
+
+// Add this component at the top of your file with other components
+const MobileMessage = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col items-center justify-center p-6 text-center">
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      className="h-24 w-24 text-indigo-500 mb-6" 
+      fill="none" 
+      viewBox="0 0 24 24" 
+      stroke="currentColor"
+    >
+      <path 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        strokeWidth={2} 
+        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" 
+      />
+    </svg>
+    <h1 className="text-3xl font-bold text-white mb-4">
+      Under Construction
+    </h1>
+    <p className="text-gray-300 text-lg mb-6">
+      Please visit us on desktop to use the Skin Creator.
+    </p>
+    <p className="text-indigo-400 text-sm">
+      We are working on mobile support!
+    </p>
+  </div>
+);
+
+export default function SkinCreator() {
+  // Display state
+  const [selectedDino, setSelectedDino] = useState('allosaurus');
+  const [isDaylight, setIsDaylight] = useState(true);
+  const [marks, setMarks] = useState(false);
+  
+  // Slot management state
+  const [skinSlots, setSkinSlots] = useState<SkinSlot[]>([
+    { id: 1, name: "Demo Slot 1", preview: null, isActive: true, isLocked: false, isSelected: true, skin: null, timer: null },
+    { id: 2, name: "Demo Slot 2", preview: null, isActive: false, isLocked: false, isSelected: false, skin: null, timer: null },
+    { id: 3, name: "Demo Slot 3", preview: null, isActive: false, isLocked: false, isSelected: false, skin: null, timer: null }
+  ]);
+  const [selectedSlot, setSelectedSlot] = useState<number>(1);
+  const [skinName, setSkinName] = useState<string>("Demo Skin");
+  const [isSaved, setIsSaved] = useState<boolean>(true);
+  
+  // UI state
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showGlitchModal, setShowGlitchModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importJsonText, setImportJsonText] = useState('');
+  
+  // Skin customization state
+  const [selectedPattern, setSelectedPattern] = useState(1);
+  const [colors, setColors] = useState<ColorState>({
+    maleColor: '#FFFFFF',
+    highColor: '#FFFFFF',
+    midColor: '#FFFFFF',
+    mid2Color: '#FFFFFF',
+    lowColor: '#FFFFFF',
+    bottomColor: '#FFFFFF',
+    eyeColor: '#FFFFFF',
+  });
+
+  // Glitch effect state
+  const [selectedColorForGlitch, setSelectedColorForGlitch] = useState<keyof ColorState | null>(null);
+  const [glitchSkinValues, setGlitchSkinValues] = useState<Partial<Record<keyof ColorState, string>>>({});
+
+  // Color picker configuration
+  const colorPickers: ColorPickerItem[] = [
+    { label: 'Male Color', key: 'maleColor' },
+    { label: 'High Color', key: 'highColor' },
+    { label: 'Mid Color', key: 'midColor' },
+    { label: 'Mid 2 Color', key: 'mid2Color' },
+    { label: 'Low Color', key: 'lowColor' },
+    { label: 'Bottom Color', key: 'bottomColor' },
+    { label: 'Eye Color', key: 'eyeColor' },
+  ];
+
+
+// 1. Import handler
+const handleImportSkin = (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (!canExportSkins) {
+    showToast('Import is for Patreon supporters only.', 'error');
+    return;
+  }
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const json = JSON.parse(event.target?.result as string);
+
+      // Validate structure
+      const requiredKeys = ['b', 'e', 'f', 'm', 'u', 'd1', 'md', 'pi', 'sv'];
+      const isValid =
+        typeof json === 'object' &&
+        requiredKeys.every((k) => typeof json[k] === 'string');
+
+      if (!isValid) {
+        showToast('Invalid skin file format.', 'error');
+        return;
+      }
+
+      // Parse glitch values
+      const glitchValues: Partial<Record<keyof ColorState, string>> = {};
+      if (isGlitchSkin(json.md)) glitchValues.maleColor = json.md;
+      if (isGlitchSkin(json.f)) glitchValues.highColor = json.f;
+      if (isGlitchSkin(json.m)) glitchValues.midColor = json.m;
+      if (isGlitchSkin(json.d1)) glitchValues.mid2Color = json.d1;
+      if (isGlitchSkin(json.b)) glitchValues.lowColor = json.b;
+      if (isGlitchSkin(json.u)) glitchValues.bottomColor = json.u;
+      if (isGlitchSkin(json.e)) glitchValues.eyeColor = json.e;
+
+      setGlitchSkinValues(glitchValues);
+
+      setColors({
+        maleColor: convertXYZToHex(parseXYZ(json.md)),
+        highColor: convertXYZToHex(parseXYZ(json.f)),
+        midColor: convertXYZToHex(parseXYZ(json.m)),
+        mid2Color: convertXYZToHex(parseXYZ(json.d1)),
+        lowColor: convertXYZToHex(parseXYZ(json.b)),
+        bottomColor: convertXYZToHex(parseXYZ(json.u)),
+        eyeColor: convertXYZToHex(parseXYZ(json.e)),
+      });
+      setSelectedPattern(parseInt(json.pi) || 1);
+      setMarks(json.sv === "1");
+      setSkinName('Imported Skin');
+      showToast('Skin imported!', 'success');
+    } catch (err) {
+      showToast('Failed to import skin: Invalid JSON.', 'error');
+    }
+  };
+  reader.readAsText(file);
+};
+
+
+// Demo version - features always enabled
+const canUseGlitchSkins = useMemo(() => true, []);
+const canExportSkins = useMemo(() => true, []);
+
+// Add this function to format the skin data without stringifying
+const formatRawSkinData = (
+  colors: ColorState, 
+  pattern: number, 
+  marks: boolean,
+  glitchValues: Partial<Record<keyof ColorState, string>> = {}
+) => {
+  // Convert hex color to X,Y,Z format, or use glitch value if available
+  const getColorValue = (key: keyof ColorState): string => {
+    if (glitchValues[key]) {
+      return glitchValues[key] as string;
+    }
+    
+    const hex = colors[key];
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    
+    // Ensure no value is exactly 0
+    const safeValue = (v: number) => v === 0 ? 0.0001 : v;
+    return `X=${safeValue(r)},Y=${safeValue(g)},Z=${safeValue(b)}`;
+  };
+
+  return {
+    b: getColorValue('lowColor'),
+    e: getColorValue('eyeColor'),
+    f: getColorValue('highColor'),
+    m: getColorValue('midColor'),
+    u: getColorValue('bottomColor'),
+    d1: getColorValue('mid2Color'),
+    md: getColorValue('maleColor'),
+    pi: pattern.toString(),
+    sv: marks ? "1" : "0"
+  };
+};
+
+  // Add this helper function
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type, visible: true });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Update the parseSkinJson function to detect glitch skins
+function parseSkinJson(jsonStr: string) {
+  const data = JSON.parse(jsonStr);
+  
+  // Create an object to store detected glitch values
+  const glitchValues: Partial<Record<keyof ColorState, string>> = {};
+  
+  // Check each color component for glitch values
+  if (isGlitchSkin(data.md)) glitchValues.maleColor = data.md;
+  if (isGlitchSkin(data.f)) glitchValues.highColor = data.f;
+  if (isGlitchSkin(data.m)) glitchValues.midColor = data.m;
+  if (isGlitchSkin(data.d1)) glitchValues.mid2Color = data.d1;
+  if (isGlitchSkin(data.b)) glitchValues.lowColor = data.b;
+  if (isGlitchSkin(data.u)) glitchValues.bottomColor = data.u;
+  if (isGlitchSkin(data.e)) glitchValues.eyeColor = data.e;
+  
+  // Store the glitch values for later use
+  setGlitchSkinValues(glitchValues);
+  
+  // Return the parsed color data
+  return {
+    maleColor: convertXYZToHex(parseXYZ(data.md)),
+    highColor: convertXYZToHex(parseXYZ(data.f)),
+    midColor: convertXYZToHex(parseXYZ(data.m)),
+    mid2Color: convertXYZToHex(parseXYZ(data.d1)),
+    lowColor: convertXYZToHex(parseXYZ(data.b)),
+    bottomColor: convertXYZToHex(parseXYZ(data.u)),
+    eyeColor: convertXYZToHex(parseXYZ(data.e)),
+    pattern: parseInt(data.pi) || 0,
+    marks: parseInt(data.sv) === 1
+  };
+}
+
+  const LightToggle = () => (
+    <button
+      onClick={() => setIsDaylight(prev => !prev)}
+      className="absolute top-4 left-4 z-10 bg-gray-900/80 backdrop-blur-sm rounded-full p-2 border border-indigo-500/50"
+    >
+      {isDaylight ? (
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="h-6 w-6 text-yellow-400" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" 
+          />
+        </svg>
+      ) : (
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="h-6 w-6 text-indigo-400" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" 
+          />
+        </svg>
+      )}
+    </button>
+  );
+  
+  // Helper function to parse XYZ string values
+  function parseXYZ(xyzStr: string) {
+    const matches = xyzStr.match(/X=([-\d.]+),Y=([-\d.]+),Z=([-\d.]+)/);
+    if (!matches) {
+      return { X: 0, Y: 0, Z: 0 };
+    }
+    return {
+      X: parseFloat(matches[1]),
+      Y: parseFloat(matches[2]),
+      Z: parseFloat(matches[3])
+    };
+  }
+  
+  // Update convertXYZToHex to handle display values
+  function convertXYZToHex({ X, Y, Z }: { X: number, Y: number, Z: number }) {
+    // Normalize values to 0-255 range
+    const normalizeValue = (value: number) => {
+      // Handle negative values
+      if (value < 0) value = 0;
+      // If value is in 0-1 range, multiply by 255
+      if (value >= 0 && value <= 1) value = value * 255;
+      // Clamp to 255 for display
+      if (value > 255) value = 255;
+      return Math.round(value);
+    };
+  
+    const r = normalizeValue(X);
+    const g = normalizeValue(Y);
+    const b = normalizeValue(Z);
+  
+    // Ensure hex values are properly padded
+    const toHex = (n: number) => n.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+  
+  const handleColorChange = (key: keyof ColorState, value: string) => {
+    // Ensure value is a valid hex color
+    console.log(`Changing color for ${key}:`, value);
+    if (/^#[0-9A-F]{6}$/i.test(value)) {
+      setColors(prev => ({
+        ...prev,
+        [key]: value
+      }));
+      
+      // If we change a color manually, remove any glitch skin value for that color
+      if (glitchSkinValues[key]) {
+        setGlitchSkinValues(prev => {
+          const updated = { ...prev };
+          delete updated[key];
+          return updated;
+        });
+      }
+    }
+  };
+
+  // Update the handleApplyGlitchSkin function
+  const handleApplyGlitchSkin = (colorKey: keyof ColorState, glitchSkin: { x: number; y: number; z: number; value?: string }) => {
+    if (!canUseGlitchSkins) {
+      showToast('Glitch skins are available for Patreon supporters and staff only', 'error');
+      setShowGlitchModal(false);
+      return;
+    }
+    // Store as XYZ string
+    setGlitchSkinValues(prev => ({
+      ...prev,
+      [colorKey]: glitchSkin.value || `X=${glitchSkin.x},Y=${glitchSkin.y},Z=${glitchSkin.z}`
+    }));
+    setShowGlitchModal(false);
+    setSelectedColorForGlitch(null);
+  };
+
+  // Similarly, update the handleResetGlitchSkin function
+  const handleResetGlitchSkin = (colorKey: keyof ColorState) => {
+    if (!canUseGlitchSkins) {
+      showToast('Glitch skins are available for Patreon supporters and staff only', 'error');
+      return;
+    }
+    
+    setGlitchSkinValues(prev => {
+      const updated = { ...prev };
+      delete updated[colorKey];
+      return updated;
+    });
+  };
+
+  // Initialize welcome toast
+  useEffect(() => {
+    setToast({
+      message: "Welcome to the Demo! All features are enabled for testing.",
+      type: "success" as const,
+      visible: true
+    });
+    setTimeout(() => setToast(null), 5000);
+  }, []);
+
+    
+  // 2. Add this formatter function to format the time remaining in a readable format
+  const formatTimeRemaining = (timerDate: string | null): string | null => {
+    if (!timerDate) return null;
+    
+    const expiryTime = new Date(timerDate).getTime();
+    const now = new Date().getTime();
+    const timeRemaining = expiryTime - now;
+    
+    if (timeRemaining <= 0) return 'Expired';
+    
+    // Convert to days/hours/minutes
+    const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (days > 0) return `${days}d ${hours}h remaining`;
+    if (hours > 0) return `${hours}h ${minutes}m remaining`;
+    return `${minutes}m remaining`;
+  };
+
+  // 3. Add a useEffect to update the timer display every minute
+  useEffect(() => {
+    // Skip if there are no timers
+    if (!skinSlots.some(slot => slot.timer)) return;
+    
+    // Update timer display every minute
+    const timerInterval = setInterval(() => {
+      setSkinSlots(prev => [...prev]); // Force re-render to update timer display
+    }, 60000);
+    
+    return () => clearInterval(timerInterval);
+  }, [skinSlots]);
+
+
+
+  // Load skin data when slot changes
+  useEffect(() => {
+    const currentSlot = skinSlots.find(s => s.id === selectedSlot);
+    if (!currentSlot) return;
+    
+    // Update active slot
+    setSkinSlots(slots => slots.map(slot => ({
+      ...slot,
+      isSelected: slot.id === selectedSlot
+    })));
+    
+    // Update name and save state
+    setSkinName(currentSlot.name);
+    setIsSaved(true);
+    
+    // Apply skin data if exists
+    if (currentSlot.skin) {
+      try {
+        const data = JSON.parse(currentSlot.skin);
+        // Update colors
+        const newColors = {
+          maleColor: data.maleColor || '#FFFFFF',
+          highColor: data.highColor || '#FFFFFF',
+          midColor: data.midColor || '#FFFFFF',
+          mid2Color: data.mid2Color || '#FFFFFF',
+          lowColor: data.lowColor || '#FFFFFF',
+          bottomColor: data.bottomColor || '#FFFFFF',
+          eyeColor: data.eyeColor || '#FFFFFF'
+        };
+        setColors(newColors);
+        // Update pattern if available
+        if (data.pattern) setSelectedPattern(data.pattern);
+      } catch (e) {
+        console.error('Failed to parse skin data:', e);
+      }
+    }
+  }, [selectedSlot, skinSlots]);
+
+  const [glitchEffects, setGlitchEffects] = useState<GlitchEffectGroup>({});
+  const [isEditingName, setIsEditingName] = useState(false);
+
+  // Helper function for showing demo notifications
+  const showDemoNotification = (message: string) => {
+    setToast({
+      message,
+      type: 'info',
+      visible: true
+    });
+
+    // Auto-hide toast after 3 seconds
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    fetch('/glitches.json')
+      .then(res => res.json())
+      .then(setGlitchEffects)
+      .catch(() => setGlitchEffects({}));
+  }, []);
+
+  // Event handlers
+  const handleSlotSelect = (slotId: number) => {
+    setSelectedSlot(slotId);
+  
+    setSkinSlots(prev => prev.map(slot => ({
+      ...slot,
+      isSelected: slot.id === slotId
+    })));
+  
+    const selectedSlot = skinSlots.find(s => s.id === slotId);
+    
+    // If slot is empty or has no skin, set default values
+    if (!selectedSlot?.skin) {
+      setSkinName('New Skin');
+      setColors({
+        maleColor: '#FFFFFF',
+        highColor: '#FFFFFF',
+        midColor: '#FFFFFF',
+        mid2Color: '#FFFFFF',
+        lowColor: '#FFFFFF',
+        bottomColor: '#FFFFFF',
+        eyeColor: '#FFFFFF'
+      });
+      setSelectedPattern(1);
+      setMarks(false);
+      setGlitchSkinValues({});
+      return;
+    }
+  
+    try {
+      const skinData = JSON.parse(selectedSlot.skin);
+      setSkinName(skinData.name || 'Demo Skin');
+      
+      setColors({
+        maleColor: skinData.maleColor || '#FFFFFF',
+        highColor: skinData.highColor || '#FFFFFF',
+        midColor: skinData.midColor || '#FFFFFF',
+        mid2Color: skinData.mid2Color || '#FFFFFF',
+        lowColor: skinData.lowColor || '#FFFFFF',
+        bottomColor: skinData.bottomColor || '#FFFFFF',
+        eyeColor: skinData.eyeColor || '#FFFFFF'
+      });
+      
+      if (skinData.pattern) setSelectedPattern(skinData.pattern);
+      if (skinData.marks !== undefined) setMarks(skinData.marks);
+      if (skinData.glitch) setGlitchSkinValues(skinData.glitch);
+    } catch (e) {
+      console.error('Failed to parse skin data:', e);
+    }
+  };
+
+const handleNameChange = (newName: string) => {
+  if (!newName) {
+    setToast({
+      message: 'Please enter a name',
+      type: 'error',
+      visible: true
+    });
+    return;
+  }
+
+  // Update skin name in demo state
+  setSkinName(newName);
+  setIsEditingName(false);
+  showDemoNotification(`Renamed skin to "${newName}"`);
+
+  // Update slot name
+  setSkinSlots(prev => prev.map(slot =>
+    slot.id === selectedSlot
+      ? { ...slot, name: newName }
+      : slot
+  ));
+};
+
+const handleSaveSkin = () => {
+  showDemoNotification("Save Skin\nThis would normally save your skin design to our database and cost Primal Points.");
+};
+
+const handleSetActive = () => {
+  showDemoNotification("Set Active\nThis would normally set this skin as your active skin in-game.");
+};
+
+const handleDeleteSkin = () => {
+  showDemoNotification("Delete Skin\nThis would normally permanently delete this skin design.");
+};
+
+  return (
+    <>
+      {/* Add demo banner */}
+      <div className="fixed top-0 left-0 right-0 bg-yellow-600/90 text-white text-center py-2 z-50">
+        Demo Version - For Demonstration Purposes Only
+      </div>
+
+      <div className="relative min-h-screen overflow-hidden">
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 -z-10" />
+        
+        <main className="pt-[22px] px-8 pb-16 overflow-auto max-h-screen">
+          <h1 className="text-4xl font-bold text-white text-center mb-2">Skin Creator Demo</h1>
+          
+          {/* Rest of your layout remains the same, just update the buttons */}
+          
+          {/* Update the buttons section */}
+          <div className="absolute bottom-16 right-4 z-10 flex flex-col gap-1.5">
+            <button
+              onClick={handleSaveSkin}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            >
+              Save Skin (Demo)
+            </button>
+            <button
+              onClick={handleSetActive}
+              className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+            >
+              Set Active (Demo)
+            </button>
+            <button
+              onClick={handleDeleteSkin}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              Delete (Demo)
+            </button>
+          </div>
+
+          {/* Add demo explanation */}
+          <div className="mt-8 bg-blue-600/20 backdrop-blur-sm border border-blue-500/50 px-4 py-2 rounded-lg">
+            <p className="text-blue-200 text-sm">
+              This is a demonstration version of our Skin Creator. 
+              In the live version, users can create, save, and manage custom skins for use in-game.
+              Features like saving, setting active skins, and deletion are simulated in this demo.
+            </p>
+          </div>
+        </main>
+
+        {/* Replace the Steam ID warning with a demo note */}
+        <div className="bg-yellow-600/20 backdrop-blur-sm border border-yellow-500/50 px-4 py-2 rounded-lg mt-4">
+          <p className="text-yellow-200 text-sm">
+            Demo Version: In the live version, this tool is integrated with our game server and Discord bot.
+          </p>
+        </div>
+
+        {/* Keep your modals but update them for demo purposes */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4">
+              <h3 className="text-xl font-bold text-white mb-4">Demo: Delete Skin</h3>
+              <p className="text-gray-300 mb-6">
+                In the live version, this would permanently delete your skin design.
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                >
+                  Close Demo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Add the NavDropdown component at the bottom of the file
+const NavDropdown = ({ title, items }: { title: string; items: { name: string; href: string }[] }) => (
+  <div className="relative group">
+    <button className="px-4 py-2 hover:text-gray-300 font-medium">
+      {title}
+    </button>
+    <div className="absolute hidden group-hover:block w-48 bg-gray-800 rounded-md shadow-lg">
+      {items.map((item) => (
+        <Link 
+          key={item.name} 
+          href={item.href}
+          className="block px-4 py-2 text-sm hover:bg-gray-700"
+        >
+          {item.name}
+        </Link>
+      ))}
+    </div>
+  </div>
+);
+
+
+// Add this function to determine required tier
+const getRequiredTier = (slotNumber: number) => {
+  if (slotNumber <= 2) return null;
+  if (slotNumber === 3) return "Tier 1";
+  if (slotNumber === 4) return "Tier 2";
+  if (slotNumber === 5) return "Tier 3";
+  if (slotNumber === 6) return "Tier 4";
+  return "Tier 5";
+};
+
+// Add this helper function to convert hex to XYZ format
+function convertHexToXYZ(hex: string): string {
+  // Remove the # from hex color
+  const color = hex.substring(1);
+  
+  // Convert hex to RGB
+  const r = parseInt(color.substring(0, 2), 16) / 255;
+  const g = parseInt(color.substring(2, 4), 16) / 255;
+  const b = parseInt(color.substring(4, 6), 16) / 255;
+
+  // Ensure no value is exactly 0
+  const adjustValue = (val: number) => val === 0 ? 0.01 : val;
+
+  // Format the XYZ string
+  return `X=${adjustValue(r)},Y=${adjustValue(g)},Z=${adjustValue(b)}`;
+}
+
+// Update this function to handle glitch skins
+function formatSkinDataForSave(
+  colors: ColorState, 
+  pattern: number, 
+  marks: boolean,
+  glitchValues: Partial<Record<keyof ColorState, string>> = {}
+): string {
+  // Convert hex color to X,Y,Z format, or use glitch value if available
+  const getColorValue = (key: keyof ColorState): string => {
+    if (glitchValues[key]) {
+      return glitchValues[key] as string;
+    }
+    
+    const hex = colors[key];
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    
+    // Ensure no value is exactly 0
+    const safeValue = (v: number) => v === 0 ? 0.0001 : v;
+    return `X=${safeValue(r)},Y=${safeValue(g)},Z=${safeValue(b)}`;
+  };
+
+  const skinData = {
+    b: getColorValue('lowColor'),
+    e: getColorValue('eyeColor'),
+    f: getColorValue('highColor'),
+    m: getColorValue('midColor'),
+    u: getColorValue('bottomColor'),
+    d1: getColorValue('mid2Color'),
+    md: getColorValue('maleColor'),
+    pi: pattern.toString(),
+    sv: marks ? "1" : "0"
+  };
+
+  // Convert to JSON and remove escaping
+  return JSON.stringify(skinData);
+}
+// Update the GlitchSkinsModal component
+// Update the GlitchSkinsModal component to include a warning
+const GlitchSkinsModal = ({ 
+  onClose, 
+  selectedColor, 
+  onApply,
+  onReset,
+  hasGlitchValue,
+  colorPickers,
+  glitchEffects
+}: { 
+  onClose: () => void;
+  selectedColor: keyof ColorState | null;
+  onApply: (colorKey: keyof ColorState, option: GlitchEffectOutput) => void;
+  onReset: (colorKey: keyof ColorState) => void;
+  hasGlitchValue: boolean;
+  colorPickers: ColorPickerItem[];
+  glitchEffects: GlitchEffectGroup;
+}) => {
+  if (!selectedColor) return null;
+
+  // Grouped by interior color
+  return (
+       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-xl font-bold text-white">
+            Glitch Skins
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="bg-yellow-800/40 border border-yellow-600/60 rounded-md p-2 mb-4">
+          <p className="text-yellow-300 text-sm flex items-start">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>
+              <strong>Warning:</strong> Glitch skin effects vary between devices especially when using more than one glitch effect. What you see here may not match exactly how it appears in-game.
+            </span>
+          </p>
+        </div>
+        <div className="text-gray-300 mb-4">
+          <p>Select a glitch skin to apply a special effect to this color section.</p>
+        </div>
+        <div className="max-h-60 overflow-y-auto pr-2 mb-4">
+          {Object.entries(glitchEffects).map(([interior, effects]) => (
+            <div key={interior} className="mb-2">
+              <div className="font-bold text-indigo-300 mb-1">{interior}</div>
+              {effects.map((option: GlitchEffectInput, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onApply(selectedColor, {
+                    ...option,
+                    value: `X=${option.x},Y=${option.y},Z=${option.z}`
+                  })}
+                  className="w-full text-left p-2 hover:bg-gray-700 rounded-lg mb-1 transition-colors flex items-center"
+                >
+                  <span className="text-white">{option.description}</span>
+                  <span className="ml-2 text-xs text-gray-400">{`(${option.x}, ${option.y}, ${option.z})`}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between">
+          {hasGlitchValue && (
+            <button
+              onClick={() => onReset(selectedColor)}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              Reset to Normal
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors ml-auto"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// Add this component at the bottom of the file
+const LoadingOverlay = () => (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-gray-800/90 px-6 py-4 rounded-lg shadow-xl flex items-center gap-3">
+      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <span className="text-white font-medium">Processing...</span>
+    </div>
+  </div>
+);
+
+// Add this component inside your SkinCreator component
+const DeleteConfirmationModal = ({ onClose, onDelete }: { onClose: () => void; onDelete: () => void }) => (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <h3 className="text-xl font-bold text-white mb-4">Demo: Delete Skin</h3>
+      <p className="text-gray-300 mb-6">
+        In the live version, this would permanently delete your skin design.
+      </p>
+      <div className="flex justify-end gap-4">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+        >
+          Close Demo
+        </button>
+      </div>
+    </div>
+  </div>
+);
